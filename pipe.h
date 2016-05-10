@@ -16,17 +16,23 @@
 /*defination of branch predictor*/
 #define USE_BRANCH_PRED      1
 #define GHR_LEN              8
+#define PHT_INDEX_MAX        GHR+1
+#define PHT_INDEX_MASK       0x000000ff
 #define NUM_PHT              256
 #define BTB_INDEX            10
 #define BTB_NUM              1024
+#define BTB_INDEX_MASK       0x000003ff
+#define BTB_TAG_MASK         0xfffffffc
 #define RAS_NUM              8
 //INST CACHE AND DATA CACHE
 #define USE_INST_CACHE       1
 #define USE_DATA_CACHE       1
 #define INST_CACHE_WAY       4
 #define INST_CACHE_SET       64
+#define IC_INDEX_MASK        0x000007e0  //using bits[10:5] of the data address
 #define DATA_CACHE_WAY       8
 #define DATA_CACHE_SET       256
+#define DC_INDEX_MASK        0x00001fe0  //using bits[12:5] of the data address
 #define CACHE_BLOCK_SIZE     32  
 //memory latency,which means that once a miss occurs to inst cache or data cache,
 //it need to get data from memory in at least 50 cpu cycles
@@ -80,28 +86,59 @@ typedef struct Pipe_Op {
     int link_reg;         /* register to place link into? */
 
 } Pipe_Op;
+/*defination of inst cache and data cache*/
+typedef struct cache_block{
+        uint32_t tag;
+        uint32_t state; //0:invalid ,1:valid ,2:modified(only valid in data cache)
+        uint32_t recency;
+        uint32_t block[8];
+        }cache_block;
+        
+extern cache_block inst_cache[INST_CACHE_SET][INST_CACHE_WAY] ;
 
+extern cache_block data_cache[DATA_CACHE_SET][DATA_CACHE_WAY] ;
 /*defination of BTB states*/
 typedef struct btb_state{
     uint32_t tag;
     uint32_t valid;
-    uint32_t br_type;
+    CTRL_TYPE ctrl_type;
     uint32_t target;
 }btb_state;
 
 extern  btb_state btb[BTB_NUM];
+
+//btb return this type of info
 typedef struct btb_ret{
         uint32_t target;
         int hit;
-        uint32_t br_type;
+        CTRL_TYPE br_type;
         }btb_ret;
         
+/* pred info used for branch mispred recovery*/
+typedef struct br_pred_info{
+	uint32_t  target;
+	int taken;
+	CTRL_TYPE br_type;
+}br_pred_info;
+
+/* recovery info*/
+typedef struct br_recovery{
+	uint32_t dest_pc;
+	int mispred;
+	pht_cnt  cnt;
+    CTRL_TYPE ctrl_type;
+	uint32_t c_pc;
+	int pred_taken;
+}br_recovery;
+enum pht_cnt {str_nt,wea_nt,wea_t,str_t};
+
+enum CTRL_TYPE {br,jal,jalr,j,jr};
 
 //here i will use a function to operate the 8 least-significant-bit 
 extern  int GHR;
 
 //here i will use a function to read or update the PHT
-extern  int PHT[NUM_PHT];
+extern  pht_cnt  PHT[NUM_PHT];
          
 /*state of RAS:return address stack*/
 typedef struct RAS_state{
@@ -109,7 +146,7 @@ typedef struct RAS_state{
         uint32_t ras_entry[RAS_NUM];
         }RAS_state;
         
-extern RAS_state RAS;
+extern RAS_state ras;
 /* The pipe state represents the current state of the pipeline. It holds a
  * pointer to the op that is currently at the input of each stage. As stages
  * execute, they remove the op from their input (set the pointer to NULL) and
@@ -178,21 +215,31 @@ void     write_data_cache(uint32_t addr,uint32_t value);
 /*fun used to update GHR*/
 void update_GHR(int actual_direction);
 
+uint32_t gen_pht_index(uint32_t pc);
+
 /*read PHT*/
-uint32_t read_PHT(uint32_t PHT_index);
+uint32_t PHT_pred(uint32_t PHT_index);
 /*update PHT*/
-void update_PHT(uint32_t PHT_index, uint32_t pre_state, int actual_direction );
+void update_PHT(uint32_t PHT_index, pht_cnt pre_state, int actual_direction );
 
 /*fun about btb*/
-void update_btb(uint32_t c_pc,uint32_t target,uint32_t br_type);
-int hit_in_btb(uint32_t c_pc);
-btb_ret access_btb(uint32_t c_pc);
+void update_btb(uint32_t c_pc,uint32_t target,uint32_t br_type,int btb_miss,int dest_mismatch);
 
+btb_ret btb_pred(uint32_t c_pc);
+
+/*prediction*/
+br_pred_info  br_pred(uint32_t c_pc);
 /*fun about ras*/
 void   push_ras(uint32_t push ,uint32_t target);
 uint32_t  pop_ras(uint32_t pop);
+/* used for jalr inst*/
+uint32_t  jalr_ras(uint32_t push_pc);
 
 /*initialize state of all branch predictor structures to 0*/
 void initial_brp(); 
+
+/*initialize state of caches*/
+void initial_caches();
+
 
 #endif
