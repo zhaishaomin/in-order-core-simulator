@@ -10,14 +10,171 @@
 /*inst cache functions*/
 uint32_t read_inst_cache(uint32_t addr)
 {
-         if()
-         }
+	uint32_t index,tag,inst_word,offset;
+	index=addr&IC_INDEX_MASK;
+	index=index>>CACHE_BLOCK_SIZE;
+	tag=addr&IC_TAG_MASK;
+	offset=(addr&CACHE_OFFSET_MASK)>>2;
+	if(ic_fsm==tag_cmp)
+	{
+		int  way=IC_NUM_WAY;
+		for(int i=0;i<IC_NUM_WAY;i++)
+		if(tag==inst_cache[index][i].tag)
+		{
+			way=i;
+			break;
+		}
+		if(way==IC_NUM_WAY)
+		  ic_stall=1;
+        inst_word=inst_cache[index][way].block[offset];
+	}
+	if(ic_stall==1)
+	{
+         //allocate a mshr for ic miss
+         ic_mshr.valid=1;
+         ic_mshr.begin=0;
+         ic_mshr.done=0;
+         ic_mshr.addr=addr;
+         //transform ic_state from tag_cmp to wait_block
+         ic_fsm=wait_block;
+    }
+         
+     return inst_word;
+}
          
 
 /*data cache function*/
 uint32_t read_data_cache(uint32_t addr)
+{
+    uint32_t index,cache_data,tag,offset;
+    index=addr&DC_INDEX_MASK;
+    index=index>>CACHE_BLOCK_SIZE;
+    tag=addr&DC_TAG_MASK;
+    offset=(addr&CACHE_OFFSET_MASK)>>2;
+    if(dc_fsm==tag_cmp)
+    {
+		int  way=DC_NUM_WAY;
+		for(int i=0;i<DC_NUM_WAY;i++)
+		if(tag==data_cache[index][i].tag)
+		{
+			way=i;
+			break;
+		}
+		if(way==DC_NUM_WAY)
+		  dc_stall=1;
+        cache_data=data_cache[index][way].block[offset];
+	}
+	if(dc_stall==1)
+	{
+         //allocate a mshr for ic miss
+         dc_mshr.valid=1;
+         dc_mshr.begin=0;
+         dc_mshr.done=0;
+         dc_mshr.addr=addr;
+         dc.mshr.is_load=1;
+         //transform ic_state from tag_cmp to wait_block
+         dc_fsm=wait_block;
+    }
+         
+     return cache_data;
+}
 void     write_data_cache(uint32_t addr,uint32_t value)
+{
+    uint32_t index,cache_data,tag,offset;
+    index=addr&DC_INDEX_MASK;
+    index=index>>CACHE_BLOCK_SIZE;
+    tag=addr&DC_TAG_MASK;
+    offset=(addr&CACHE_OFFSET_MASK)>>2;
+    if(dc_fsm==tag_cmp)
+    {
+		int  way=DC_NUM_WAY;
+		for(int i=0;i<DC_NUM_WAY;i++)
+		if(tag==data_cache[index][i].tag)
+		{
+			way=i;
+			break;
+		}
+		if(way==DC_NUM_WAY)
+		  dc_stall=1;
+        else
+          data_cache[index][way].block[offset]=value;
+	}
+	if(dc_stall==1)
+	{
+         //allocate a mshr for ic miss
+         dc_mshr.valid=1;
+         dc_mshr.begin=0;
+         dc_mshr.done=0;
+         dc_mshr.addr=addr;
+         dc.mshr.is_load=0;
+         //transform ic_state from tag_cmp to wait_block
+         dc_fsm=wait_block;
+    }
+         
+}
+/*fun about mem access*/
 
+/*check if mem_access has done,that mem_stall_cycles is 0 means done,then call write_block_to_xx according to ic_accessing_mem,
+ if ic_accessing_mem is 0 ,then call write_block_to_dc(),if allocated addr is modified, call wb_block_to_mem before allocate new block*/ 
+void mem_access_done()
+{
+     
+ }
+     
+/*used to check if there is a pending entry in either ic_mshr or dc_mshr,then req a access to mem if there is at least one valid entry!*/ 
+void req_mem()
+{ 
+   if(mem_stall_cycles==0)
+   {
+     if((ic_mshr.valid==1&&ic_mshr.begin==0)&&(dc_mshr.valid==1&&dc_mshr.begin==0))
+     {
+         if(priority_state==dc_first)
+         {
+           ic_accessing_mem=0;//dc miss go to mem
+           ic_mshr.begin==1;
+         }
+         else  
+         {
+           ic_accessing_mem=1;//ic miss go to mem
+           dc_mshr.begin==1;
+         }
+         valid_ic_accessing_mem=1;
+         mem_stall_cycles=50;
+     }
+     else if((ic_mshr.valid==1&&ic_mshr.begin==0)||(dc_mshr.valid==1&&dc_mshr.begin==0))
+     {
+         if(ic_mshr.valid==1&&ic_mshr.begin==0)
+         {
+           ic_accessing_mem=1;//ic miss go to mem
+           ic_mshr.begin=1;
+         ]
+         
+         if(dc_mshr.valid==1&&dc_mshr.begin==0)
+         {
+           ic_accessing_mem=0;//dc miss go to mem
+           dc_mshr.begin=1;
+         }
+         
+           valid_ic_accessing_mem=1;  
+           mem_stall_cycles=50;   
+     }
+   }
+   else
+     mem_stall_cycles--;
+ }
+ 
+/*if mem has found what ic want to access,then this fun will be called */
+void write_block_to_ic() //called by mem_access_done()
+{
+     }
+/*if mem has found what dc want to access,then this fun will be called */
+void write_block_to_dc()//called by mem_access_done()
+{
+     }
+/*if a block in dc which has been selected to be replaced by a new block is modified,it should be called before real allocation*/
+void wb_block_to_mem()// called by write_block_to_dc()
+{
+     }
 /*fun used to update GHR*/
 void update_GHR(int actual_direction)
 {
@@ -226,3 +383,4 @@ void initial_caches()
 		}
 }
 
+#endif

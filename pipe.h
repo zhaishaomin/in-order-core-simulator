@@ -30,10 +30,13 @@
 #define INST_CACHE_WAY       4
 #define INST_CACHE_SET       64
 #define IC_INDEX_MASK        0x000007e0  //using bits[10:5] of the data address
+#define IC_TAG_MASK          0xfffff800  //using bits[31:11] of the data address
 #define DATA_CACHE_WAY       8
 #define DATA_CACHE_SET       256
 #define DC_INDEX_MASK        0x00001fe0  //using bits[12:5] of the data address
-#define CACHE_BLOCK_SIZE     32  
+#define DC_TAG_MASK          0xffffe000  //using bits[31:13] of the data address
+#define CACHE_BLOCK_SIZE     5 //in binary used to gen index
+#define CACHE_OFFSET_MASK    0x0000001c
 //memory latency,which means that once a miss occurs to inst cache or data cache,
 //it need to get data from memory in at least 50 cpu cycles
 #define MEM_LATENCY          50
@@ -95,8 +98,38 @@ typedef struct cache_block{
         }cache_block;
         
 extern cache_block inst_cache[INST_CACHE_SET][INST_CACHE_WAY] ;
+extern uint32_t mem_ic_cycles;/*used to track how many cycles left before inst_block return from mem*/
 
 extern cache_block data_cache[DATA_CACHE_SET][DATA_CACHE_WAY] ;
+extern uint32_t mem_dc_cycles;/*used to track how many cycles left before data_block return from mem*/
+
+extern uint32_t mem_stall_cycles;
+
+
+typedef struct MSHR{
+        int valid;
+        int begin;
+        int done;
+        uint32_t addr;
+        int is_load;
+        }MSHR;
+extern  MSHR   dc_mshr, ic_mshr;
+
+//used by arbiter of mem to determine which cache miss go first
+enum ic_dc_access_priority{ic_first,dc_first};//initialize to dc_first
+extern  ic_dc_access_priority priority_state;
+
+extern int ic_accessing_mem;//used to track whether a ic miss accesses mem! 1:ic_access_mem;
+extern int valid_ic_accessing_mem;                                                                    //0:dc_access_mem.
+
+enum    ic_fsm_state {tag_cmp,wait_block};
+extern  ic_fsm_state ic_fsm;
+extern  int ic_stall;//set by req_mem() ;reset by write_block_to_ic(); used by pipe_stage_fetch();
+
+enum    dc_fsm_state{tag_cmp,wait_block,write_block};
+extern  dc_fsm_state dc_fsm; 
+extern  int dc_stall;//set by re_mem() ;reset by write_block_to_dc(); used by pipe_stage_mem();
+
 /*defination of BTB states*/
 typedef struct btb_state{
     uint32_t tag;
@@ -211,6 +244,24 @@ uint32_t read_inst_cache(uint32_t addr);
 /*data cache function*/
 uint32_t read_data_cache(uint32_t addr);
 void     write_data_cache(uint32_t addr,uint32_t value);
+
+/*fun about mem access*/
+
+/*check if mem_access has done,that mem_stall_cycles is 0 means done,then call write_block_to_xx according to ic_accessing_mem,
+ if ic_accessing_mem is 0 ,then call write_block_to_dc(),if allocated addr is modified, call wb_block_to_mem before allocate new block*/ 
+void mem_access_done();
+
+/*used to check if there is a pending entry in either ic_mshr or dc_mshr,then req a access to mem if there is at least one valid entry!*/ 
+void req_mem();
+
+/*if mem has found what ic want to access,then this fun will be called */
+void write_block_to_ic(); //called by mem_access_done()
+
+/*if mem has found what dc want to access,then this fun will be called */
+void write_block_to_dc();//called by mem_access_done()
+
+/*if a block in dc which has been selected to be replaced by a new block is modified,it should be called before real allocation*/
+void wb_block_to_mem();// called by write_block_to_dc()
 
 /*fun used to update GHR*/
 void update_GHR(int actual_direction);

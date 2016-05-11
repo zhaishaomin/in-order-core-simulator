@@ -136,8 +136,8 @@ void pipe_stage_wb()
 
 void pipe_stage_mem()
 {
-    /* if there is no instruction in this pipeline stage, we are done */
-    if (!pipe.mem_op)
+    /* if there is no instruction in this pipeline stage, we are done or mem state has been stalled since last cycle */
+    if (!pipe.mem_op||dc_stall==1)
         return;
 
     /* grab the op out of our input slot */
@@ -145,8 +145,11 @@ void pipe_stage_mem()
 
     uint32_t val = 0;
     if (op->is_mem)
-        val = mem_read_32(op->mem_addr & ~3);
-
+        val = read_data_cache(op->mem_addr & ~3);
+        
+    if(dc_stall==1)
+      return;
+      
     switch (op->opcode) {
         case OP_LW:
         case OP_LH:
@@ -202,7 +205,7 @@ void pipe_stage_mem()
                 case 3: val = (val & 0x00FFFFFF) | ((op->mem_value & 0xFF) << 24); break;
             }
 
-            mem_write_32(op->mem_addr & ~3, val);
+            write_data_cache(op->mem_addr & ~3, val);
             break;
 
         case OP_SH:
@@ -217,15 +220,18 @@ void pipe_stage_mem()
             printf("new word %08x\n", val);
 #endif
 
-            mem_write_32(op->mem_addr & ~3, val);
+            write_data_cache(op->mem_addr & ~3, val);
             break;
 
         case OP_SW:
             val = op->mem_value;
-            mem_write_32(op->mem_addr & ~3, val);
+            write_data_cache(op->mem_addr & ~3, val);
+            
             break;
     }
-
+    /* if a dc miss occurs ,we need to avoid NULL mem_op and write mem_op to wb_op*/
+    if(dc_stall==1)
+      return;
     /* clear stage input and transfer to next stage */
     pipe.mem_op = NULL;
     pipe.wb_op = op;
@@ -667,7 +673,7 @@ void pipe_stage_decode()
 void pipe_stage_fetch()
 {
     /* if pipeline is stalled (our output slot is not empty), return */
-    if (pipe.decode_op != NULL)
+    if (pipe.decode_op != NULL||ic_stall==1)
         return;
 
     /* Allocate an op and send it down the pipeline. */
@@ -675,7 +681,10 @@ void pipe_stage_fetch()
     memset(op, 0, sizeof(Pipe_Op));
     op->reg_src1 = op->reg_src2 = op->reg_dst = -1;
 
-    op->instruction = mem_read_32(pipe.PC);
+    op->instruction = read_inst_cache(pipe.PC);
+    //after ic_access,if ic miss ,then ic_stall will be set to 1
+    if(ic_stall==1)
+      return;
     op->pc = pipe.PC;
     pipe.decode_op = op;
 
