@@ -3,7 +3,7 @@
  *
  * MIPS pipeline timing simulator
  *
- * Chris Fallin, 2012
+ * Chris Fallin, 2012  £»shaomin zhai 2016 
  */
 
 #ifndef _PIPE_H_
@@ -41,6 +41,11 @@
 //it need to get data from memory in at least 50 cpu cycles
 #define MEM_LATENCY          50
 
+/*defination of replace policy algorithm*/
+#define PSEUDO_RANDOM        
+#define 3_BIT_PSEUDO_LRU     
+#define 8_BIT_PSEUDO_LRU     
+#define ROUND_ROBIN          
 
 
 /* Pipeline ops (instances of this structure) are high-level representations of
@@ -91,13 +96,23 @@ typedef struct Pipe_Op {
 } Pipe_Op;
 /*defination of inst cache and data cache*/
 typedef struct cache_block{
-        uint32_t tag;
-        uint32_t state; //0:invalid ,1:valid ,2:modified(only valid in data cache)
+        uint32_t tag[INST_CACHE_WAY];
+        uint32_t state[INST_CACHE_WAY]; //0:invalid ,1:valid ,2:modified(only valid in data cache)
+        
+/*defination of block replace policy algorithm */
+#ifdef  PSEUDO_RANDOM
+uint32_t  recency;
+#elif   8_BIT_LRU
+uint32_t  recency[4];
+#elif   3_BIT_LRU
+uint32_t  recency[3];
+#else  //round robin
+uint32_t  recency;
         uint32_t recency;
-        uint32_t block[8];
+        uint32_t block[INST_CACHE_WAY][8];
         }cache_block;
         
-extern cache_block inst_cache[INST_CACHE_SET][INST_CACHE_WAY] ;
+extern cache_block inst_cache[INST_CACHE_SET] ;
 extern uint32_t mem_ic_cycles;/*used to track how many cycles left before inst_block return from mem*/
 
 extern cache_block data_cache[DATA_CACHE_SET][DATA_CACHE_WAY] ;
@@ -262,6 +277,20 @@ void write_block_to_dc();//called by mem_access_done()
 
 /*if a block in dc which has been selected to be replaced by a new block is modified,it should be called before real allocation*/
 void wb_block_to_mem();// called by write_block_to_dc()
+
+
+
+/*defination of block replace policy algorithm */
+#ifdef  PSEUDO_RANDOM
+void    pseudo_random();
+#elif   8_BIT_LRU
+void    8_bit_lru();
+#elif   3_BIT_LRU
+void    3_bit_lru();
+#else  
+void    round_robin();
+
+
 
 /*fun used to update GHR*/
 void update_GHR(int actual_direction);

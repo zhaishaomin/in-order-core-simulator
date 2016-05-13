@@ -175,6 +175,30 @@ void write_block_to_dc()//called by mem_access_done()
 void wb_block_to_mem()// called by write_block_to_dc()
 {
      }
+     
+/*defination of block replace policy algorithm */
+#ifdef  PSEUDO_RANDOM
+void    pseudo_random()
+{
+        
+}
+#elif   8_BIT_LRU
+void    8_bit_lru()
+{
+        
+}
+#elif   3_BIT_LRU
+void    3_bit_lru()
+{
+        
+}
+#else  
+void    round_robin()
+{
+        
+}
+
+
 /*fun used to update GHR*/
 void update_GHR(int actual_direction)
 {
