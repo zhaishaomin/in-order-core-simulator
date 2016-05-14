@@ -36,6 +36,7 @@
 #define DC_INDEX_MASK        0x00001fe0  //using bits[12:5] of the data address
 #define DC_TAG_MASK          0xffffe000  //using bits[31:13] of the data address
 #define CACHE_BLOCK_SIZE     5 //in binary used to gen index
+//#define CACHE_BLOCK_WORD_SIZE  8
 #define CACHE_OFFSET_MASK    0x0000001c
 //memory latency,which means that once a miss occurs to inst cache or data cache,
 //it need to get data from memory in at least 50 cpu cycles
@@ -95,9 +96,9 @@ typedef struct Pipe_Op {
 
 } Pipe_Op;
 /*defination of inst cache and data cache*/
-typedef struct cache_block{
-        uint32_t tag[INST_CACHE_WAY];
-        uint32_t state[INST_CACHE_WAY]; //0:invalid ,1:valid ,2:modified(only valid in data cache)
+typedef struct d_cache_block{
+        uint32_t tag[DATA_CACHE_WAY];
+        uint32_t state[DATA_CACHE_WAY]; //0:invalid ,1:valid ,2:modified(only valid in data cache)
         
 /*defination of block replace policy algorithm */
 #ifdef  PSEUDO_RANDOM
@@ -109,13 +110,19 @@ uint32_t  recency[3];
 #else  //round robin
 uint32_t  recency;
         uint32_t recency;
-        uint32_t block[INST_CACHE_WAY][8];
+        uint32_t block[DATA_CACHE_WAY][8];
         }cache_block;
         
-extern cache_block inst_cache[INST_CACHE_SET] ;
+typedef struct i_cache_block{
+        uint32_t tag[INST_CACHE_WAY];
+        uint32_t state[INST_CACHE_WAY]; //0:invalid ,1:valid ,2:modified(only valid in data cache)
+        uint32_t block[INST_CACHE_WAY][8];
+        }cache_block;
+
+extern i_cache_block inst_cache[INST_CACHE_SET] ;
 extern uint32_t mem_ic_cycles;/*used to track how many cycles left before inst_block return from mem*/
 
-extern cache_block data_cache[DATA_CACHE_SET][DATA_CACHE_WAY] ;
+extern d_cache_block data_cache[DATA_CACHE_SET] ;
 extern uint32_t mem_dc_cycles;/*used to track how many cycles left before data_block return from mem*/
 
 extern uint32_t mem_stall_cycles;
@@ -282,15 +289,19 @@ void wb_block_to_mem();// called by write_block_to_dc()
 
 /*defination of block replace policy algorithm */
 #ifdef  PSEUDO_RANDOM
-void    pseudo_random();
+void    pseudo_random_cache_miss(uint32_t hited_index,  uint32_t * new_block, uint32_t evicted_addr);
 #elif   8_BIT_LRU
-void    8_bit_lru();
+void    8_bit_lru_cache_hit(uint32_t hited_index, uint32_t hited_way );
+void    8_bit_lru_snoop_inv(uint32_t hited_index, uint32_t hited_way );
+void    8_bit_lru_cache_miss(uint32_t hited_index,  uint32_t * new_block, uint32_t evicted_addr);
 #elif   3_BIT_LRU
-void    3_bit_lru();
+void    3_bit_lru_cache_hit(uint32_t hited_index, uint32_t hited_way );
+void    3_bit_lru_snoop_inv(uint32_t hited_index, uint32_t hited_way );
+void    3_bit_lru_cache_miss(uint32_t hited_index,  uint32_t * new_block, uint32_t evicted_addr);
 #else  
-void    round_robin();
+void    round_robin_cache_miss(uint32_t hited_index, uint32_t * new_block, uint32_t evicted_addr);
 
-
+extern uint32_t LFSR;
 
 /*fun used to update GHR*/
 void update_GHR(int actual_direction);

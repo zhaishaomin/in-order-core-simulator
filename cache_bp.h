@@ -178,24 +178,749 @@ void wb_block_to_mem()// called by write_block_to_dc()
      
 /*defination of block replace policy algorithm */
 #ifdef  PSEUDO_RANDOM
-void    pseudo_random()
+void    pseudo_random(uint32_t hited_index,  uint32_t * new_block, uint32_t evicted_addr)
+{       //note: the evicted_addr should be the block level addr such as 0xffff ffe0 means 32bytes or 8 words block
+        uint32_t temp_block[8],addr_mem,write_back;
+        if(data_cache[ hited_index].recency==0)
+        {
+            for(int i=0;i<8;i++)
+            {
+                 temp_block[i]=data_cache[ hited_index].block[0][i];//extract the evicted data
+                 data_cache[ hited_index].block[0][i]=new_block[i]; //write missed data into the block
+                
+            }
+            if(data_cache[ hited_index].state[0]==2)//modified !
+            {
+               for(int i=0;i<8;i++)
+               {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+               }
+            }
+        }
+        else if(data_cache[ hited_index].recency==1)
+        {
+            for(int i=0;i<8;i++)
+            {
+                 temp_block[i]=data_cache[ hited_index].block[1][i];//extract the evicted data
+                 data_cache[ hited_index].block[1][i]=new_block[i]; //write missed data into the block
+                
+            }
+            if(data_cache[ hited_index].state[1]==2)//modified !
+            {
+               for(int i=0;i<8;i++)
+               {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+               }
+            }
+        }
+        else if(data_cache[ hited_index].recency==2)
+        {
+            for(int i=0;i<8;i++)
+            {
+                 temp_block[i]=data_cache[ hited_index].block[2][i];//extract the evicted data
+                 data_cache[ hited_index].block[2][i]=new_block[i]; //write missed data into the block
+                
+            }
+            if(data_cache[ hited_index].state[2]==2)//modified !
+            {
+               for(int i=0;i<8;i++)
+               {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]) ;  //write back the dirty data to mem if neccesary!
+               }
+            }
+        }
+        else// if(data_cache[ hited_index].recency==3)
+        {
+            for(int i=0;i<8;i++)
+            {
+                 temp_block[i]=data_cache[ hited_index].block[3][i];//extract the evicted data
+                 data_cache[ hited_index].block[3][i]=new_block[i]; //write missed data into the block
+                
+            }
+            if(data_cache[ hited_index].state[3]==2)//modified !
+            {
+               for(int i=0;i<8;i++)
+               {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+               }
+            }
+        }
+        //get the bits[1:0] of LFSR,which is a increment counter here and updated  every cycle!
+        //update the random[1:0] according to the LFSR
+        data_cache[ hited_index].recency=LFSR&ox00000003;
+}
+#elif   3_BIT_LRU
+void    3_bit_lru_cache_hit(uint32_t hited_index, uint32_t hited_way )
 {
+        if(hited_way==0)
+        {
+            data_cache[hited_index].recency[1]=0;
+            data_cache[hited_index].recency[0]=0;
+        }
+        else if(hited_way==1)
+        {
+            data_cache[hited_index].recency[1]=0;
+            data_cache[hited_index].recency[0]=1;
+        }
+        else if(hited_way==2)
+        {
+            data_cache[hited_index].recency[2]=0;
+            data_cache[hited_index].recency[1]=1;
+        }
+        else//hited_way==3
+        {
+            data_cache[hited_index].recency[2]=1;
+            data_cache[hited_index].recency[1]=1;
+        }
+}
+void    3_bit_lru_snoop_inv(uint32_t hited_index, uint32_t hited_way )
+{
+        if(hited_way==0)
+        {
+            data_cache[hited_index].recency[1]=1;
+            data_cache[hited_index].recency[0]=1;
+        }
+        else if(hited_way==1)
+        {
+            data_cache[hited_index].recency[1]=1;
+            data_cache[hited_index].recency[0]=0;
+        }
+        else if(hited_way==2)
+        {
+            data_cache[hited_index].recency[2]=1;
+            data_cache[hited_index].recency[1]=0;
+        }
+        else//hited_way==3
+        {
+            data_cache[hited_index].recency[2]=0;
+            data_cache[hited_index].recency[1]=0;
+        }
+        
+}
+void    3_bit_lru_cache_miss(uint32_t hited_index, uint32_t * new_block, uint32_t evicted_addr)
+{
+        if(data_cache[hited_index].recency[1]==1)
+        {
+            
+            if(data_cache[hited_index].recency[0]=1)
+            {
+                 data_cache[hited_index].recency[1]=0;
+                 data_cache[hited_index].recency[0]=0;
+                 
+                 for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[0][i];//extract the evicted data
+                 data_cache[ hited_index].block[0][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[0]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+            }
+            else
+            {
+                 data_cache[hited_index].recency[1]=0;
+                 data_cache[hited_index].recency[0]=1;
+                 for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[1][i];//extract the evicted data
+                 data_cache[ hited_index].block[1][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[1]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+            }
+        }
+        else
+        {
+            if(data_cache[hited_index].recency[2]==1)
+            {
+                 data_cache[hited_index].recency[1]=0;
+                 data_cache[hited_index].recency[0]=1;
+                 for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[2][i];//extract the evicted data
+                 data_cache[ hited_index].block[2][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[2]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+            }
+            else
+            {
+                 data_cache[hited_index].recency[1]=1;
+                 data_cache[hited_index].recency[0]=1;
+                 
+                 for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[3][i];//extract the evicted data
+                 data_cache[ hited_index].block[3][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[3]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+            }
+        }    
+        
         
 }
 #elif   8_BIT_LRU
-void    8_bit_lru()
+void    8_bit_lru_cache_hit(uint32_t hited_index, uint32_t hited_way )
 {
+        if(hited_way==0)
+        {
+             if(data_cache[hited_index].recency[0]==0)
+             {
+                  data_cache[hited_index].recency[0]=3;
+                  data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;     
+             }      
+             else if(data_cache[hited_index].recency[0]==1)
+             {
+                  if(data_cache[hited_index].recency[1]!=0)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  }
+                  if(data_cache[hited_index].recency[2]!=0)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  }
+                  if(data_cache[hited_index].recency[3]!=0)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+                  }
+                  data_cache[hited_index].recency[0]==3;
+             }   
+             else if(data_cache[hited_index].recency[0]==2)
+             {
+                  if(data_cache[hited_index].recency[1]=3)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  }
+                  if(data_cache[hited_index].recency[2]=3)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  }
+                  if(data_cache[hited_index].recency[3]=3)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+                  }
+                  data_cache[hited_index].recency[0]==3;
+                  
+             } 
+            
+        }
+        else if(hited_way==1)
+        {
+             if(data_cache[hited_index].recency[1]==0)
+             {
+                  data_cache[hited_index].recency[1]=3;
+                  data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+                  data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;     
+             }      
+             else if(data_cache[hited_index].recency[1]==1)
+             {
+                  if(data_cache[hited_index].recency[0]!=0)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+                  }
+                  if(data_cache[hited_index].recency[2]!=0)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  }
+                  if(data_cache[hited_index].recency[3]!=0)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+                  }
+                  data_cache[hited_index].recency[1]==3;
+             }   
+             else if(data_cache[hited_index].recency[1]==2)
+             {
+                  if(data_cache[hited_index].recency[0]=3)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+                  }
+                  if(data_cache[hited_index].recency[2]=3)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  }
+                  if(data_cache[hited_index].recency[3]=3)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+                  }
+                  data_cache[hited_index].recency[1]==3;
+                  
+             }
+            
+        }
+        else if(hited_way==2)
+        {
+             if(data_cache[hited_index].recency[2]==0)
+             {
+                  data_cache[hited_index].recency[2]=3;
+                  data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  data_cache[hited_index].recency[0]=data_cache[hited_index].recency[2]-1;
+                  data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;     
+             }      
+             else if(data_cache[hited_index].recency[2]==1)
+             {
+                  if(data_cache[hited_index].recency[1]!=0)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  }
+                  if(data_cache[hited_index].recency[0]!=0)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+                  }
+                  if(data_cache[hited_index].recency[3]!=0)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+                  }
+                  data_cache[hited_index].recency[2]==3;
+             }   
+             else if(data_cache[hited_index].recency[2]==2)
+             {
+                  if(data_cache[hited_index].recency[1]=3)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  }
+                  if(data_cache[hited_index].recency[0]=3)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+                  }
+                  if(data_cache[hited_index].recency[3]=3)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+                  }
+                  data_cache[hited_index].recency[2]==3;
+                  
+             }
+            
+        }
+        else//hited_way==3
+        {
+            if(data_cache[hited_index].recency[3]==0)
+             {
+                  data_cache[hited_index].recency[3]=3;
+                  data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;     
+             }      
+             else if(data_cache[hited_index].recency[3]==1)
+             {
+                  if(data_cache[hited_index].recency[1]!=0)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  }
+                  if(data_cache[hited_index].recency[2]!=0)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  }
+                  if(data_cache[hited_index].recency[0]!=0)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+                  }
+                  data_cache[hited_index].recency[3]==3;
+             }   
+             else if(data_cache[hited_index].recency[3]==2)
+             {
+                  if(data_cache[hited_index].recency[1]=3)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+                  }
+                  if(data_cache[hited_index].recency[2]=3)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+                  }
+                  if(data_cache[hited_index].recency[0]=3)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+                  }
+                  data_cache[hited_index].recency[3]==3;
+                  
+             }
+        }
         
 }
-#elif   3_BIT_LRU
-void    3_bit_lru()
+void    8_bit_lru_snoop_inv(uint32_t hited_index, uint32_t hited_way )
 {
+        if(hited_way==0)
+        {
+             if(data_cache[hited_index].recency[0]==3)
+             {
+                  data_cache[hited_index].recency[0]=0;
+                  data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;     
+             }      
+             else if(data_cache[hited_index].recency[0]==2)
+             {
+                  if(data_cache[hited_index].recency[1]!=3)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  }
+                  if(data_cache[hited_index].recency[2]!=3)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  }
+                  if(data_cache[hited_index].recency[3]!=3)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;
+                  }
+                  data_cache[hited_index].recency[0]==0;
+             }   
+             else if(data_cache[hited_index].recency[0]==1)
+             {
+                  if(data_cache[hited_index].recency[1]=1)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  }
+                  if(data_cache[hited_index].recency[2]=1)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  }
+                  if(data_cache[hited_index].recency[3]=1)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;
+                  }
+                  data_cache[hited_index].recency[0]==0;
+                  
+             }
+        }
+        else if(hited_way==1)
+        {
+             if(data_cache[hited_index].recency[1]==3)
+             {
+                  data_cache[hited_index].recency[1]=0;
+                  data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;
+                  data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;     
+             }      
+             else if(data_cache[hited_index].recency[1]==2)
+             {
+                  if(data_cache[hited_index].recency[0]!=3)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;
+                  }
+                  if(data_cache[hited_index].recency[2]!=3)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  }
+                  if(data_cache[hited_index].recency[3]!=3)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;
+                  }
+                  data_cache[hited_index].recency[1]==0;
+             }   
+             else if(data_cache[hited_index].recency[1]==1)
+             {
+                  if(data_cache[hited_index].recency[0]=1)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;
+                  }
+                  if(data_cache[hited_index].recency[2]=1)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  }
+                  if(data_cache[hited_index].recency[3]=1)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;
+                  }
+                  data_cache[hited_index].recency[1]==0;
+                  
+             }
+        }
+        else if(hited_way==2)
+        {
+             if(data_cache[hited_index].recency[2]==3)
+             {
+                  data_cache[hited_index].recency[2]=0;
+                  data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;
+                  data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;     
+             }      
+             else if(data_cache[hited_index].recency[2]==2)
+             {
+                  if(data_cache[hited_index].recency[1]!=3)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  }
+                  if(data_cache[hited_index].recency[0]!=3)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;
+                  }
+                  if(data_cache[hited_index].recency[3]!=3)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;
+                  }
+                  data_cache[hited_index].recency[2]==0;
+             }   
+             else if(data_cache[hited_index].recency[2]==1)
+             {
+                  if(data_cache[hited_index].recency[1]=1)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  }
+                  if(data_cache[hited_index].recency[0]=1)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;
+                  }
+                  if(data_cache[hited_index].recency[3]=1)
+                  {
+                      data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]+1;
+                  }
+                  data_cache[hited_index].recency[2]==0;
+                  
+             }
+             
+        }
+        else // if(hited_way==3)
+        {
+             if(data_cache[hited_index].recency[3]==3)
+             {
+                  data_cache[hited_index].recency[3]=0;
+                  data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;     
+             }      
+             else if(data_cache[hited_index].recency[3]==2)
+             {
+                  if(data_cache[hited_index].recency[1]!=3)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  }
+                  if(data_cache[hited_index].recency[2]!=3)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  }
+                  if(data_cache[hited_index].recency[0]!=3)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;
+                  }
+                  data_cache[hited_index].recency[3]==0;
+             }   
+             else if(data_cache[hited_index].recency[3]==1)
+             {
+                  if(data_cache[hited_index].recency[1]=1)
+                  {
+                      data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]+1;
+                  }
+                  if(data_cache[hited_index].recency[2]=1)
+                  {
+                      data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]+1;
+                  }
+                  if(data_cache[hited_index].recency[0]=1)
+                  {
+                      data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]+1;
+                  }
+                  data_cache[hited_index].recency[3]==0;
+                  
+             }
+             
+        }     
         
+}
+void    8_bit_lru_cache_miss(uint32_t hited_index, uint32_t * new_block, uint32_t evicted_addr)
+{
+        if(data_cache[hited_index].recency[0]=0)
+        {
+              data_cache[hited_index].recency[0]=3;
+              data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+              data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+              data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+              
+              for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[0][i];//extract the evicted data
+                 data_cache[ hited_index].block[0][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[0]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+        }
+        else if(data_cache[hited_index].recency[1]=0)
+        {
+              data_cache[hited_index].recency[1]=3;
+              data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+              data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+              data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+              
+              for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[1][i];//extract the evicted data
+                 data_cache[ hited_index].block[1][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[1]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+                
+        }
+        else if(data_cache[hited_index].recency[2]=0)
+        {
+              data_cache[hited_index].recency[2]=3;
+              data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+              data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+              data_cache[hited_index].recency[3]=data_cache[hited_index].recency[3]-1;
+              
+              for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[2][i];//extract the evicted data
+                 data_cache[ hited_index].block[2][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[2]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+                
+        }
+        else //if(data_cache[hited_index].recency[0]=0)
+        {
+              data_cache[hited_index].recency[3]=3;
+              data_cache[hited_index].recency[1]=data_cache[hited_index].recency[1]-1;
+              data_cache[hited_index].recency[2]=data_cache[hited_index].recency[2]-1;
+              data_cache[hited_index].recency[0]=data_cache[hited_index].recency[0]-1;
+              
+              for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[3][i];//extract the evicted data
+                 data_cache[ hited_index].block[3][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[3]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+        }
 }
 #else  
-void    round_robin()
+void    round_robin_cache_miss(uint32_t hited_index,  uint32_t * new_block, uint32_t evicted_addr)
 {
-        
+        if(data_cache[hited_index].recency==0)
+        {
+             data_cache[hited_index].recency=1;
+             
+             for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[0][i];//extract the evicted data
+                 data_cache[ hited_index].block[0][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[0]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+        }
+        else if(data_cache[hited_index].recency==1)
+        {
+             data_cache[hited_index].recency=2;
+             
+             for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[1][i];//extract the evicted data
+                 data_cache[ hited_index].block[1][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[1]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+        }
+        else if(data_cache[hited_index].recency==2)
+        {
+             data_cache[hited_index].recency=3;
+             
+             for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[2][i];//extract the evicted data
+                 data_cache[ hited_index].block[2][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[2]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+        }
+        else // if(data_cache[hited_index].recency=3)
+        {
+             data_cache[hited_index].recency=0;
+             
+             for(int i=0;i<8;i++)
+                {
+                 temp_block[i]=data_cache[ hited_index].block[3][i];//extract the evicted data
+                 data_cache[ hited_index].block[3][i]=new_block[i]; //write missed data into the block
+                
+                }
+                if(data_cache[ hited_index].state[3]==2)//modified !
+                {
+                   for(int i=0;i<8;i++)
+                   {
+                   addr_mem=evicted_addr+i<<2;     //prepare the addr to mem 
+                   mem_write_32(addr_mem,temp_block[i]);   //write back the dirty data to mem if neccesary!
+                   }
+                }
+        }
 }
 
 
@@ -393,18 +1118,34 @@ void initial_caches()
 	for(int i=0;i<INST_CACHE_SET;i++)
 		for(int j=0;j<INST_CACHE_WAY;j++)
 		{
-			inst_cache[i][j].tag=0;
-			inst_cache[i][j].state=0;
-			inst_cache[i][j].recency=0;
+			inst_cache[i].tag[j]=0;
+			inst_cache[i].state[j]=0;
+	
 		}
 
 	for(int i=0;i<DATA_CACHE_SET;i++)
-		for(int j=0;j<DATA_CACHE_WAY;j++)
+	{	for(int j=0;j<DATA_CACHE_WAY;j++)
 		{
-			data_cache[i][j].tag=0;
-			data_cache[i][j].state=0;
-			data_cache[i][j].recency=0;
+			data_cache[i].tag[j]=0;
+			data_cache[i].state[j]=0;
+		
 		}
+		#ifdef  PSEUDO_RANDOM
+        data_cache[i].recency=0;
+        #elif   8_BIT_LRU
+        for(int k=0:k<4;j++)
+        {
+            data_cache[i].recency[k]=k;
+        }
+        #elif   3_BIT_LRU
+        for(int a=0; a<3; a++)
+        {
+            data_cache[i].recency[a]=0;
+        }
+        #else  //round robin
+        data_cache[i].recency=0;
+		
+    }
 }
 
 #endif
